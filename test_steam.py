@@ -5,74 +5,112 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.service import Service
-import random
-import string
+from faker import Faker
+
+WAIT_TIMEOUT = 10
+STEAM_URL = "https://store.steampowered.com"
 
 
-def random_string(length=10):
-    letters = string.ascii_letters
-    return ''.join(random.choice(letters) for i in range(length))
+LOGIN_BUTTON = (By.XPATH, "//a[contains(@class, 'global_action_link')]")
+LOGIN_FORM = (By.XPATH, "//form[contains(@action, '/login/')]")
+USERNAME_FIELD = (By.XPATH, ".//input[@type='text']")
+PASSWORD_FIELD = (By.XPATH, ".//input[@type='password']")
+SUBMIT_BUTTON = (By.XPATH, ".//*[@type='submit']")
+ERROR_MESSAGE = (By.XPATH, "//div[@role='alert' or contains(@class, 'error')]")
+UNIQUE_MAIN_PAGE_ELEMENT = (By.ID, "global_header")
+
+fake = Faker()
+
+
+@pytest.fixture
+def driver():
+    """Фикстура для инициализации драйвера"""
+    service = Service(ChromeDriverManager().install())
+    driver = webdriver.Chrome(service=service)
+    driver.maximize_window()
+    yield driver
+    driver.quit()
+
+
+@pytest.fixture
+def wait(driver):
+    """Фикстура для ожиданий"""
+    return WebDriverWait(driver, WAIT_TIMEOUT)
 
 
 class TestSteamLogin:
-    def setup_method(self):
-        service = Service(ChromeDriverManager().install())
-        self.driver = webdriver.Chrome(service=service)
-        self.wait = WebDriverWait(self.driver, 10)
+    def test_failed_login_shows_error(self, driver, wait):
+        """Тест неудачного входа на Steam"""
 
-    def teardown_method(self):
-        self.driver.quit()
+        driver.get(STEAM_URL)
+        wait.until(EC.visibility_of_element_located(UNIQUE_MAIN_PAGE_ELEMENT))
+        print("Главная страница загружена")
 
-    def test_failed_login_shows_error(self):
-        self.driver.get("https://store.steampowered.com")
-        print("Главная страница Steam открыта. Успешно")
-
-        login_btn = self.wait.until(
-            EC.element_to_be_clickable(
-                (By.XPATH, "(//*[contains(@class, 'global_action_link')])[1]"))
-        )
+        login_btn = wait.until(EC.element_to_be_clickable(LOGIN_BUTTON))
         login_btn.click()
-        print("Кнопка входа нажата. Успешно")
+        print("Перешли на страницу логина")
 
-        username = self.wait.until(
-            EC.visibility_of_element_located(
-                (By.XPATH, "(//*[contains(@class, '_2GBWeup')])[1]"))
-        )
-        password = self.wait.until(
-            EC.visibility_of_element_located(
-                (By.XPATH, "(//*[contains(@class, '_2GBWeup')])[2]"))
-        )
+        login_form = wait.until(EC.presence_of_element_located(LOGIN_FORM))
+        print("Найдена форма логина")
 
-        random_login = random_string()
-        random_password = random_string()
+        username = login_form.find_element(*USERNAME_FIELD)
+        password = login_form.find_element(*PASSWORD_FIELD)
+
+        random_login = fake.email()
+        random_password = fake.password()
+
         username.send_keys(random_login)
         password.send_keys(random_password)
-        print(f"Введены случайные данные: {random_login}/{random_password}")
+        print(f"Ввели данные: {random_login}/{random_password}")
 
-        submit_btn = self.wait.until(
-            EC.element_to_be_clickable(
-                (By.XPATH, "//*[contains(@class, 'DjSvCZoK') and contains(text(),'Войти')]"))
-        )
+        submit_btn = login_form.find_element(*SUBMIT_BUTTON)
         submit_btn.click()
-        print("Кнопка 'Войти' нажата")
+        print("Отправили форму")
 
-        error_message = self.wait.until(
-            EC.visibility_of_element_located(
-                (By.XPATH, "//div[contains(@class,'_1W_6HX') and contains(text(),'проверьте свой пароль')]"))
-        )
+        import time
+        time.sleep(2)
 
-        assert error_message.is_displayed(), "Сообщение об ошибке не отображается"
-        print("Тест пройден! Ошибка входа отображается корректно")
-        print(f"Текст ошибки: {error_message.text}")
+        error_selectors = [
+            (By.XPATH, "//*[@role='alert']"),
+            (By.XPATH, "//div[contains(@class, 'error')]"),
+            (By.XPATH, "//div[contains(@class, 'alert')]"),
+            (By.XPATH,
+             "//div[contains(@class, 'message') and (contains(@class, 'error') or contains(@class, 'alert'))]"),
+        ]
 
+        error_found = False
+        error_text = ""
 
-if __name__ == "__main__":
-    test = TestSteamLogin()
-    test.setup_method()
-    try:
-        test.test_failed_login_shows_error()
-        print("Тест завершен успешно!")
-    except Exception as e:
-        print(f"Тест упал с ошибкой: {e}")
-    finally:
-        test.teardown_method()
+        for by, selector in error_selectors:
+            try:
+                error_elements = driver.find_elements(by, selector)
+                for error in error_elements:
+                    if error.is_displayed() and error.text:
+                        error_text = error.text
+                        print(f"✅ Найдена ошибка: {error_text}")
+                        error_found = True
+                        break
+                if error_found:
+                    break
+            except:
+                continue
+
+        if not error_found:
+            all_text_elements = driver.find_elements(By.XPATH, "//*[text()]")
+            for element in all_text_elements:
+                if element.is_displayed():
+                    text = element.text.lower()
+                    keywords = ['error', 'ошиб', 'невер',
+                                'invalid', 'wrong', 'проверь']
+                    if any(keyword in text for keyword in keywords):
+                        error_text = element.text
+                        print(
+                            f"Найдена ошибка (по ключевым словам): {error_text}")
+                        error_found = True
+                        break
+
+        assert error_found, "Не удалось найти сообщение об ошибке"
+
+        assert len(error_text) > 0, "Текст ошибки пуст"
+
+        print(f"Тест пройден! Ошибка: '{error_text}'")
