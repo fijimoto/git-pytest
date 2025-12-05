@@ -9,14 +9,16 @@ from faker import Faker
 
 WAIT_TIMEOUT = 10
 STEAM_URL = "https://store.steampowered.com"
-
+ERROR_KEYWORDS = ['error', 'ошиб', 'невер', 'invalid', 'wrong', 'проверь']
 
 LOGIN_BUTTON = (By.XPATH, "//a[contains(@class, 'global_action_link')]")
-LOGIN_FORM = (By.XPATH, "//form[contains(@action, '/login/')]")
+LOGIN_FORM = (
+    By.XPATH, "//form[.//input[@type='text'] and .//input[@type='password']]")
 USERNAME_FIELD = (By.XPATH, ".//input[@type='text']")
 PASSWORD_FIELD = (By.XPATH, ".//input[@type='password']")
 SUBMIT_BUTTON = (By.XPATH, ".//*[@type='submit']")
-ERROR_MESSAGE = (By.XPATH, "//div[@role='alert' or contains(@class, 'error')]")
+ERROR_MESSAGE = (
+    By.XPATH, "//*[@role='alert' or contains(@class, 'error') or contains(@class, 'alert')]")
 UNIQUE_MAIN_PAGE_ELEMENT = (By.ID, "global_header")
 
 fake = Faker()
@@ -44,14 +46,11 @@ class TestSteamLogin:
 
         driver.get(STEAM_URL)
         wait.until(EC.visibility_of_element_located(UNIQUE_MAIN_PAGE_ELEMENT))
-        print("Главная страница загружена")
 
         login_btn = wait.until(EC.element_to_be_clickable(LOGIN_BUTTON))
         login_btn.click()
-        print("Перешли на страницу логина")
 
         login_form = wait.until(EC.presence_of_element_located(LOGIN_FORM))
-        print("Найдена форма логина")
 
         username = login_form.find_element(*USERNAME_FIELD)
         password = login_form.find_element(*PASSWORD_FIELD)
@@ -61,56 +60,34 @@ class TestSteamLogin:
 
         username.send_keys(random_login)
         password.send_keys(random_password)
-        print(f"Ввели данные: {random_login}/{random_password}")
 
         submit_btn = login_form.find_element(*SUBMIT_BUTTON)
         submit_btn.click()
-        print("Отправили форму")
-
-        import time
-        time.sleep(2)
-
-        error_selectors = [
-            (By.XPATH, "//*[@role='alert']"),
-            (By.XPATH, "//div[contains(@class, 'error')]"),
-            (By.XPATH, "//div[contains(@class, 'alert')]"),
-            (By.XPATH,
-             "//div[contains(@class, 'message') and (contains(@class, 'error') or contains(@class, 'alert'))]"),
-        ]
 
         error_found = False
         error_text = ""
 
-        for by, selector in error_selectors:
-            try:
-                error_elements = driver.find_elements(by, selector)
-                for error in error_elements:
-                    if error.is_displayed() and error.text:
-                        error_text = error.text
-                        print(f"✅ Найдена ошибка: {error_text}")
-                        error_found = True
-                        break
-                if error_found:
+        try:
+            error_elements = driver.find_elements(*ERROR_MESSAGE)
+            for error in error_elements:
+                if error.is_displayed() and error.text:
+                    error_text = error.text
+                    error_found = True
                     break
-            except:
-                continue
+        except:
+            pass
 
         if not error_found:
-            all_text_elements = driver.find_elements(By.XPATH, "//*[text()]")
-            for element in all_text_elements:
+            all_elements = driver.find_elements(By.XPATH, "//*[text()]")
+            for element in all_elements:
                 if element.is_displayed():
                     text = element.text.lower()
-                    keywords = ['error', 'ошиб', 'невер',
-                                'invalid', 'wrong', 'проверь']
-                    if any(keyword in text for keyword in keywords):
+                    if any(keyword in text for keyword in ERROR_KEYWORDS):
                         error_text = element.text
-                        print(
-                            f"Найдена ошибка (по ключевым словам): {error_text}")
                         error_found = True
                         break
 
         assert error_found, "Не удалось найти сообщение об ошибке"
-
         assert len(error_text) > 0, "Текст ошибки пуст"
 
-        print(f"Тест пройден! Ошибка: '{error_text}'")
+        print(f"Тест пройден! Ошибка входа: '{error_text}'")
