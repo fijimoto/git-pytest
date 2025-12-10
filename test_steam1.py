@@ -12,26 +12,18 @@ STEAM_URL = "https://store.steampowered.com"
 EXPECTED_ERROR_TEXT = "Пожалуйста, проверьте свой пароль и имя аккаунта и попробуйте снова."
 
 LOGIN_BUTTON = (By.XPATH, "//a[contains(@class, 'global_action_link')]")
-LOGIN_FORM = (By.XPATH, "//form[.//input[@type='text'] and .//input[@type='password']]")
+LOGIN_FORM = (
+    By.XPATH, "//form[.//input[@type='text'] and .//input[@type='password']]")
 USERNAME_FIELD = (By.XPATH, ".//input[@type='text']")
 PASSWORD_FIELD = (By.XPATH, ".//input[@type='password']")
 SUBMIT_BUTTON = (By.XPATH, ".//*[@type='submit']")
-ERROR_MESSAGE = (By.XPATH, "//form//div[contains(text(), 'Пожалуйста')]")
+LOADING_INDICATOR = (By.XPATH, "//form//button[@type='submit' and @disabled]")
+ERROR_MESSAGE = (
+    By.XPATH, "//button[@type='submit']/parent::div/following-sibling::div")
 UNIQUE_MAIN_PAGE_ELEMENT = (By.ID, "global_header")
+UNIQUE_LOGIN_PAGE_ELEMENT = (By.XPATH, '//div[@data-featuretarget="login"]')
 
 fake = Faker()
-
-
-class ErrorMessageVisible:
-    def __init__(self, locator):
-        self.locator = locator
-
-    def __call__(self, driver):
-        elements = driver.find_elements(*self.locator)
-        for el in elements:
-            if el.is_displayed() and el.text.strip():
-                return el
-        return False
 
 
 @pytest.fixture
@@ -56,6 +48,8 @@ class TestSteamLogin:
         login_btn = wait.until(EC.element_to_be_clickable(LOGIN_BUTTON))
         login_btn.click()
 
+        wait.until(EC.presence_of_element_located(UNIQUE_LOGIN_PAGE_ELEMENT))
+
         login_form = wait.until(EC.presence_of_element_located(LOGIN_FORM))
 
         username = login_form.find_element(*USERNAME_FIELD)
@@ -67,10 +61,11 @@ class TestSteamLogin:
         submit_btn = login_form.find_element(*SUBMIT_BUTTON)
         submit_btn.click()
 
+        wait.until(EC.presence_of_element_located(LOADING_INDICATOR))
+        wait.until(EC.invisibility_of_element_located(LOADING_INDICATOR))
+
         error_element = wait.until(
-            ErrorMessageVisible(ERROR_MESSAGE),
-            message="Фактическое: ошибка не появилась | Ожидаемое: должен появиться блок ошибки"
-        )
+            EC.visibility_of_element_located(ERROR_MESSAGE))
 
         actual_error_text = error_element.text
 
