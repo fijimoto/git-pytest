@@ -12,11 +12,13 @@ STEAM_URL = "https://store.steampowered.com"
 EXPECTED_ERROR_TEXT = "Пожалуйста, проверьте свой пароль и имя аккаунта и попробуйте снова."
 
 LOGIN_BUTTON = (By.XPATH, "//a[contains(@class, 'global_action_link')]")
-LOGIN_FORM = (
-    By.XPATH, "//form[.//input[@type='text'] and .//input[@type='password']]")
-USERNAME_FIELD = (By.XPATH, ".//input[@type='text']")
-PASSWORD_FIELD = (By.XPATH, ".//input[@type='password']")
-SUBMIT_BUTTON = (By.XPATH, ".//*[@type='submit']")
+
+USERNAME_FIELD = (
+    By.XPATH, "//div[@data-featuretarget='login']//input[@type='text']")
+PASSWORD_FIELD = (
+    By.XPATH, "//div[@data-featuretarget='login']//input[@type='password']")
+SUBMIT_BUTTON = (
+    By.XPATH, "//div[@data-featuretarget='login']//button[@type='submit']")
 LOADING_INDICATOR = (By.XPATH, "//form//button[@type='submit' and @disabled]")
 ERROR_MESSAGE = (
     By.XPATH, "//button[@type='submit']/parent::div/following-sibling::div")
@@ -50,15 +52,13 @@ class TestSteamLogin:
 
         wait.until(EC.presence_of_element_located(UNIQUE_LOGIN_PAGE_ELEMENT))
 
-        login_form = wait.until(EC.presence_of_element_located(LOGIN_FORM))
-
-        username = login_form.find_element(*USERNAME_FIELD)
-        password = login_form.find_element(*PASSWORD_FIELD)
+        username = wait.until(EC.visibility_of_element_located(USERNAME_FIELD))
+        password = wait.until(EC.visibility_of_element_located(PASSWORD_FIELD))
 
         username.send_keys(fake.user_name())
         password.send_keys(fake.password())
 
-        submit_btn = login_form.find_element(*SUBMIT_BUTTON)
+        submit_btn = wait.until(EC.element_to_be_clickable(SUBMIT_BUTTON))
         submit_btn.click()
 
         wait.until(EC.presence_of_element_located(LOADING_INDICATOR))
